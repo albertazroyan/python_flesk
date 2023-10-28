@@ -1,17 +1,17 @@
 // DOM elements
 const form = document.querySelector('form');
 const wargame_url = document.getElementById('wargame_url');
-const recent_message = document.getElementById('recent_message')
-const lastMessage = document.createElement('span')
-const sendUserMessage = document.createElement('span')
+const recent_message = document.getElementById('recent_message');
+const lastMessage = document.createElement('span');
+const sendUserMessage = document.createElement('span');
 const connected_user = document.getElementById('connected_user');
 const connectButton = document.querySelector('button[type="submit"]');
-const jsonData = document.getElementById('json_data')
+const jsonData = document.getElementById('json_data');
 const disconnectButton = document.getElementById('disconnectButton');
 const validationResult = document.getElementById('validationResult');
 const para = document.createElement('h2');
-const messageButton = document.getElementById('sendMessage')
-
+const messageButton = document.getElementById('sendMessage');
+let intervalId;
 // API endpoints
 const latestLogsEndpoint = '/logs-latest';
 const connectEndpoint = '/connect/';
@@ -21,13 +21,13 @@ const submitMessageEndpoint = '/send_message';
 const disconnectURL = '?wargame=&access=';
 
 // Active Wargame URL
-let activeWargameURL = ''
+let activeWargameURL = '';
 
 // Query parameters
 const queryParameters = {
-    wargame: 'wargame',
-    access: 'access',
-    host: 'host'
+  wargame: 'wargame',
+  access: 'access',
+  host: 'host'
 }
 
 // JSON schema for sending messages
@@ -71,7 +71,6 @@ const  isValidFormat = (text) => {
   // Define a regular expression pattern to match the format
   const pattern = /^\?wargame=[a-zA-Z0-9-]+&access=[a-zA-Z0-9-]+$/;
 
-  // Use the test method to check if the text matches the pattern
   return pattern.test(text);
 }
 
@@ -113,16 +112,16 @@ const createNewURL = (originalURL) => {
   }
 };
 
-// Helper function to extract query parameters from a URL
-const getURLParameters = (url) => {
-  const searchParams = new URLSearchParams(url);
-  const params = {};
-
-  for (const [key, value] of searchParams.entries()) {
-    params[key] = value;
-  }
-  return params;
-};
+// // Helper function to extract query parameters from a URL
+// const getURLParameters = (url) => {
+//   const searchParams = new URLSearchParams(url);
+//   const params = {};
+//
+//   for (const [key, value] of searchParams.entries()) {
+//     params[key] = value;
+//   }
+//   return params;
+// };
 
 // Helper function to display validation messages
 const displayValidationMessage = (message, color) => {
@@ -138,6 +137,58 @@ const extractLastSegmentAndBaseURL = (url) => {
   const lastSegment = extractLastSegmentFromUrl(url);
   return { base, lastSegment, wargameParam };
 };
+
+// Send a POST request to the server and handle the response.
+const sendRequestToServer = (requestData, url) => {
+  return new Promise((resolve, reject) => {
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    })
+    .then((response) => {
+      if (!response.ok) {
+        reject(new Error(`HTTP error! Status: ${response.status}`));
+        return;
+      }
+      return response.json();
+    })
+    .then((responseData) => {
+      resolve(responseData);
+    })
+    .catch((error) => {
+      reject(error);
+    });
+  });
+};
+
+// Send a GET request to the server and handle the response.
+const  get = (url) => {
+  return new Promise((resolve, reject) => {
+
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          resolve({ status: response.status });
+          return;
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (data.msg === 'ok') {
+          resolve(data.data);
+        } else {
+          resolve({ status: 404 });
+        }
+      })
+      .catch((error) => {
+        console.warn('Server failed to respond', url, error);
+        reject(error);
+      });
+  });
+}
 
 // Set initial values for wargame_url and jsonData
 wargame_url.value = createNewURL(window.location.href);
@@ -157,18 +208,17 @@ form.addEventListener('submit', function (event) {
 });
 
 const disconnectWargame = async (event) => {
-    event.preventDefault();
-  try {
-    const response = await fetch(connectEndpoint + disconnectURL, {
-      method: 'GET',
-    });
-    const result = await response.json();
+  event.preventDefault();
 
-    if (result.length === 0) {
+  try {
+    const response = await get(connectEndpoint + disconnectURL);
+
+    if (response.length === 0) {
       para.remove();
       sendUserMessage.remove();
       lastMessage.remove();
 
+      stopInterval()
       wargame_url.disabled = false;
       wargame_url.value = '';
       activeWargameURL = '';
@@ -180,8 +230,8 @@ const disconnectWargame = async (event) => {
       console.error('Failed to disconnect.');
     }
   } catch (error) {
-      console.error('An error occurred:', error);
-    }
+    console.error('An error occurred:', error);
+  }
 };
 
 const connectWargame =  async (event) => {
@@ -196,51 +246,46 @@ const connectWargame =  async (event) => {
     connectButton.disabled = true;
     wargame_url.disabled = true;
     try {
-      const response = await fetch(`${connectEndpoint}${lastSegment}&host=${base}`, {
-        method: 'GET'
-      });
+      await get(`${connectEndpoint}${lastSegment}&host=${base}`)
+          .then(async (result) => {
+              const requestData = {
+                host: base,
+                wargame: wargameParam,
+              };
 
-
-      if (response.ok) {
-        const requestData  = {
-        host: base,
-        wargame: wargameParam
-       };
-
-        window.history.pushState({}, '', `${lastSegment}&host=${base}`)
-        const result = await response.json();
-        connectButton.disabled = false;
-        wargame_url.disabled = false;
-
-          if (result !== null) {
-            await sendRequestToServer(requestData, latestLogsEndpoint).then(res => {
-              const mostRecentActivityType = res.activityType.aType;
-              lastMessage.innerText = `Recent Message: ${mostRecentActivityType}`;
-              recent_message.appendChild(lastMessage);
-            })
-            para.innerText = `Connected user: ${result.name}`;
-            connected_user.appendChild(para);
-            wargame_url.disabled = true;
-            wargame_url.style.background = 'white'
-            activeWargameURL = wargameUrl;
-            connectButton.style.display = 'none';
-            disconnectButton.style.display = 'inline';
-            displayValidationMessage('Connected successfully', 'green')
-
-            } else {
-              displayValidationMessage('Invalid response from the server', 'red')
-            }
-            } else {
-              displayValidationMessage('Failed to connect', 'red')
-            }
-        } catch (error) {
-          displayValidationMessage('An error occurred', 'red')
+              window.history.pushState({}, '', `${lastSegment}&host=${base}`);
+              connectButton.disabled = false;
+              wargame_url.disabled = false;
+              if (result) {
+                // await getLastLogs(requestData, latestLogsEndpoint)
+                await  startInterval(requestData, latestLogsEndpoint, 10000)
+                para.innerText = `Connected user: ${result.name}`;
+                connected_user.appendChild(para);
+                wargame_url.disabled = true;
+                wargame_url.style.background = 'white';
+                activeWargameURL = wargameUrl;
+                connectButton.style.display = 'none';
+                disconnectButton.style.display = 'inline';
+                displayValidationMessage('Connected successfully', 'green');
+              } else {
+                displayValidationMessage('Invalid response from the server', 'red');
+              }
+          })
+          .catch((error) => {
+            connectButton.disabled = false;
+            wargame_url.disabled = false;
+            displayValidationMessage('Failed to connect', 'red');
             console.error('Error:', error);
-        }
-    } else {
-      displayValidationMessage('Invalid URL format', 'red')
-    }
-};
+          });
+          } catch (error) {
+            displayValidationMessage('An error occurred', 'red')
+              console.error('Error:', error);
+          }
+      } else {
+        displayValidationMessage('Invalid URL format', 'red')
+      }
+  };
+
 const sendMessage = async (e) => {
   e.preventDefault();
   const displaySentMessage = (messageContent) => {
@@ -280,35 +325,34 @@ const sendMessage = async (e) => {
   }
 };
 
+const getLastLogs = (requestData, latestLogsEndpoint) => {
+  sendRequestToServer(requestData, latestLogsEndpoint).then((res) => {
+    const mostRecentActivityType = res.activityType.aType;
+    lastMessage.innerText = `Recent Message: ${mostRecentActivityType}`;
+    recent_message.appendChild(lastMessage);
+  });
+}
+
+const startInterval = (requestData, latestLogsEndpoint, intervalTime) => {
+  if (intervalId) {
+    clearInterval(intervalId);
+  }
+
+  getLastLogs(requestData, latestLogsEndpoint);
+
+  intervalId = setInterval(() => {
+    getLastLogs(requestData, latestLogsEndpoint);
+  }, intervalTime);
+}
+
+const stopInterval = () => {
+  clearInterval(intervalId);
+  intervalId = null;
+}
+
 disconnectButton.addEventListener('click', disconnectWargame);
 connectButton.addEventListener('click', connectWargame);
 messageButton.addEventListener('click', sendMessage);
-
-const sendRequestToServer = (requestData, url) => {
-  return new Promise((resolve, reject) => {
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestData)
-    })
-    .then((response) => {
-      if (!response.ok) {
-        // Handle error responses
-        reject(new Error(`HTTP error! Status: ${response.status}`));
-        return;
-      }
-      return response.json();
-    })
-    .then((responseData) => {
-      resolve(responseData);
-    })
-    .catch((error) => {
-      reject(error);
-    });
-  });
-};
 
 
 

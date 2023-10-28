@@ -14,7 +14,7 @@ Requests (a Python library for making HTTP requests)
 Setup 
 
 
-1. git clone <https://github.com/albertazroyan/python_flesk.git>
+1. git clone <https://github.com/serge-web/3rd-party.git>
 2. cd <3rd-party directory>
 
 python -m venv venv
