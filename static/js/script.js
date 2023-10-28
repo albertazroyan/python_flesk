@@ -50,10 +50,17 @@ const schema = {
         "content": 'hello'
     },
     "_id": new Date().toISOString(),
-     "_rev":undefined,
+     "_rev": undefined,
     "hasBeenRead": 'false',
     "isOpen": 'false',
     "messageType": "CustomMessage"
+}
+
+// Function to format JSON and set it for a given input element
+const formatAndSetJSON = (inputElement, json) => {
+  const formattedJSON = JSON.stringify(json, null, 4);
+  inputElement.placeholder = formattedJSON;
+  inputElement.value = formattedJSON;
 }
 
 // Helper function to check if a string is valid JSON
@@ -188,13 +195,13 @@ const  get = (url) => {
         reject(error);
       });
   });
-}
+};
 
 // Set initial values for wargame_url and jsonData
 wargame_url.value = createNewURL(window.location.href);
-jsonData.value = JSON.stringify(schema);
+formatAndSetJSON(jsonData, schema);
 
-form.addEventListener('submit', function (event) {
+const submitForm = (event) =>  {
   const wargameUrl = wargame_url.value.trim();
   const parts = wargameUrl.split('/');
   const textAfterLastSlash = parts[parts.length - 1];
@@ -205,7 +212,7 @@ form.addEventListener('submit', function (event) {
     displayValidationMessage('Invalid URL format', 'red')
   }
 
-});
+};
 
 const disconnectWargame = async (event) => {
   event.preventDefault();
@@ -218,7 +225,7 @@ const disconnectWargame = async (event) => {
       sendUserMessage.remove();
       lastMessage.remove();
 
-      stopInterval()
+      stopLogPolling()
       wargame_url.disabled = false;
       wargame_url.value = '';
       activeWargameURL = '';
@@ -258,7 +265,7 @@ const connectWargame =  async (event) => {
               wargame_url.disabled = false;
               if (result) {
                 // await getLastLogs(requestData, latestLogsEndpoint)
-                await  startInterval(requestData, latestLogsEndpoint, 10000)
+                await  startLogPolling(requestData, latestLogsEndpoint, 10000)
                 para.innerText = `Connected user: ${result.name}`;
                 connected_user.appendChild(para);
                 wargame_url.disabled = true;
@@ -296,7 +303,7 @@ const sendMessage = async (e) => {
   if (!activeWargameURL) {
     return displayValidationMessage('Please join the wargame to send a message.', 'red')
   }
-
+  
   if (!isValidJSON(jsonData.value)) {
      return displayValidationMessage('Please enter text in JSON format.', 'red');
   }
@@ -325,7 +332,7 @@ const sendMessage = async (e) => {
   }
 };
 
-const getLastLogs = (requestData, latestLogsEndpoint) => {
+const updateLatestLog = (requestData, latestLogsEndpoint) => {
   sendRequestToServer(requestData, latestLogsEndpoint).then((res) => {
     const mostRecentActivityType = res.activityType.aType;
     lastMessage.innerText = `Recent Message: ${mostRecentActivityType}`;
@@ -333,27 +340,24 @@ const getLastLogs = (requestData, latestLogsEndpoint) => {
   });
 }
 
-const startInterval = (requestData, latestLogsEndpoint, intervalTime) => {
+const startLogPolling = (requestData, latestLogsEndpoint, intervalTime) => {
   if (intervalId) {
     clearInterval(intervalId);
   }
 
-  getLastLogs(requestData, latestLogsEndpoint);
+  updateLatestLog(requestData, latestLogsEndpoint);
 
   intervalId = setInterval(() => {
-    getLastLogs(requestData, latestLogsEndpoint);
+    updateLatestLog(requestData, latestLogsEndpoint);
   }, intervalTime);
 }
 
-const stopInterval = () => {
+const stopLogPolling = () => {
   clearInterval(intervalId);
   intervalId = null;
 }
 
+form.addEventListener('submit', submitForm);
 disconnectButton.addEventListener('click', disconnectWargame);
 connectButton.addEventListener('click', connectWargame);
 messageButton.addEventListener('click', sendMessage);
-
-
-
-
