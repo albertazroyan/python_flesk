@@ -1,9 +1,6 @@
-
 // Helper class for utility functions
 class Helpers {
-
   constructor() {
-    // Query parameters
     this.queryParameters = {
       wargame: 'wargame',
       access: 'access',
@@ -13,74 +10,52 @@ class Helpers {
 
   // Function to format JSON and set it for a given input element
   formatAndSetJSON(element, json) {
-    const formattedJSON = JSON.stringify(json, null, 4);
-    element.placeholder = formattedJSON;
-    element.value = formattedJSON;
+    element.placeholder = element.value = JSON.stringify(json, null, 4);
   }
-  
-  // Helper function to check if a string is valid JSON
-  isValidJSON(jsonString) {
-    try {
-      JSON.parse(jsonString);
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-  
-  // Helper function to check if a text conforms to a specific format
+
+// Helper function to check if a text conforms to a specific format
   isValidFormat(text) {
     const pattern = /^\?wargame=[a-zA-Z0-9-]+&access=[a-zA-Z0-9-]+$/;
     return pattern.test(text);
   }
-  
+
   // Helper function to extract the last segment from a URL
   extractLastSegmentFromUrl(url) {
     const lastSlashIndex = url.lastIndexOf('/');
-    if (lastSlashIndex !== -1) {
-      return url.slice(lastSlashIndex + 1);
-    } else {
-      return url;
-    }
+    return lastSlashIndex !== -1 ? url.slice(lastSlashIndex + 1) : url;
   }
-  
-  // Helper function to check if all query parameters exist in a URL
+
+    // Helper function to check if all query parameters exist in a URL
   checkQueryParametersExist(url) {
     const parsedUrl = new URL(url);
-    // Check if all three query parameters exist
+    const { queryParameters } = this;
     return (
-      parsedUrl.searchParams.has(this.queryParameters.wargame) &&
-      parsedUrl.searchParams.has(this.queryParameters.access) &&
-      parsedUrl.searchParams.has(this.queryParameters.host)
+      parsedUrl.searchParams.has(queryParameters.wargame) &&
+      parsedUrl.searchParams.has(queryParameters.access) &&
+      parsedUrl.searchParams.has(queryParameters.host)
     );
   }
-  
-  // Helper function to create a new URL based on query parameters
+
+    // Helper function to create a new URL based on query parameters
   createNewURL(originalURL) {
+    const { queryParameters } = this;
     if (this.checkQueryParametersExist(originalURL)) {
       const parsedUrl = new URL(originalURL);
-      const newUrl = new URL(parsedUrl.searchParams.get(this.queryParameters.host));
-      newUrl.searchParams.set(
-        this.queryParameters.wargame,
-        parsedUrl.searchParams.get(this.queryParameters.wargame)
-      );
-      newUrl.searchParams.set(
-        this.queryParameters.access,
-        parsedUrl.searchParams.get(this.queryParameters.access)
-      );
+      const newUrl = new URL(parsedUrl.searchParams.get(queryParameters.host));
+      newUrl.searchParams.set(queryParameters.wargame, parsedUrl.searchParams.get(queryParameters.wargame));
+      newUrl.searchParams.set(queryParameters.access, parsedUrl.searchParams.get(queryParameters.access));
       return newUrl.toString();
     } else {
       return '';
     }
   }
-  
-  // Helper function to display validation messages
+
+// Helper function to display validation messages
   displayValidationMessage(element, message, color) {
     element.textContent = message;
     element.style.color = color;
   }
 }
-
 
 // APIHandler class for making API requests
 class APIHandler {
@@ -118,6 +93,15 @@ class APIHandler {
         body: JSON.stringify(requestData),
       });
 
+      if (response.status === 400) {
+        const errorData = await response.json();
+        if (errorData.error) {
+          throw new Error(errorData.error);
+        } else {
+          throw new Error('Client error! Status: 400');
+        }
+      }
+      
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
@@ -127,7 +111,6 @@ class APIHandler {
       throw error;
     }
   }
-
 }
 
 // Define a WargameApp class to encapsulate the application logic
@@ -139,6 +122,7 @@ class WargameApp {
     this.form = document.querySelector('form');
     this.wargameUrl = document.getElementById('wargame_url');
     this.recentMessage = document.getElementById('recent_message');
+    this.lastLog = document.createElement('span');
     this.lastMessage = document.createElement('span');
     this.sendUserMessage = document.createElement('span');
     this.connectedUser = document.getElementById('connected_user');
@@ -188,30 +172,14 @@ class WargameApp {
 
     // Set initial values for wargame_url and jsonData
     this.wargameUrl.value = this.helpers.createNewURL(window.location.href);
-    this.helpers.formatAndSetJSON(this.jsonData, this.schema);
     this.setupEventListeners();
   }
 
-
   // Event listeners setup
   setupEventListeners() {
-    this.form.addEventListener('submit', this.submitForm.bind(this));
     this.disconnectButton.addEventListener('click', this.disconnectWargame.bind(this));
     this.connectButton.addEventListener('click', this.connectWargame.bind(this));
     this.messageButton.addEventListener('click', this.sendMessage.bind(this));
-  }
-
-
-  submitForm(event) {
-    const wargameUrl = this.wargameUrl.value.trim();
-    const parts = wargameUrl.split('/');
-    const textAfterLastSlash = parts[parts.length - 1];
-    const isConforming = this.helpers.isValidFormat(textAfterLastSlash);
-
-    if (!isConforming) {
-      event.preventDefault();
-      this.helpers.displayValidationMessage('Invalid URL format', 'red');
-    }
   }
 
   // Handle disconnecting from the wargame
@@ -222,11 +190,14 @@ class WargameApp {
       const response = await this.apiHandler.get(this.connectEndpoint + this.disconnectURL);
 
       if (response.length === 0) {
+        const container = document.getElementsByClassName("container");
+        container[0].style.display = 'none';
+        
         this.para.remove();
         this.sendUserMessage.remove();
-        this.lastMessage.remove();
+        this.lastLog.remove();
 
-        this.stopLogPolling();
+        this.stopMessagePolling();
         this.wargameUrl.disabled = false;
         this.wargameUrl.value = '';
         this.activeWargameURL = '';
@@ -234,6 +205,8 @@ class WargameApp {
         window.history.pushState({}, '', '/');
         this.connectButton.style.display = 'inline';
         this.disconnectButton.style.display = 'none';
+
+        this.helpers.displayValidationMessage(this.validationResult, 'disconnected', 'green');
       } else {
         console.error('Failed to disconnect.');
       }
@@ -248,74 +221,67 @@ class WargameApp {
     const wargameUrl = this.wargameUrl.value.trim();
 
     if (!wargameUrl) return this.helpers.displayValidationMessage(this.validationResult,'Please enter a valid URL', 'red');
+    await this.connectToWargame(wargameUrl)
 
-    const { base, lastSegment, wargameParam } = this.extractLastSegmentAndBaseURL(wargameUrl);
-
-    if (this.helpers.isValidFormat(lastSegment)) {
-      this.connectButton.disabled = true;
-      this.wargameUrl.disabled = true;
-      try {
-        await this.connectToWargame(wargameUrl, base, lastSegment, wargameParam);
-      } catch (error) {
-        this.helpers.displayValidationMessage(this.validationResult, 'An error occurred', 'red');
-        console.error('Error:', error);
-      }
-    } else {
-      this.helpers.displayValidationMessage(this.validationResult, 'Invalid URL format', 'red');
-    }
   }
 
   // Function to connect to the wargame
-  async connectToWargame(wargameUrl, base, lastSegment, wargameParam) {
-    const connectURL = `${this.connectEndpoint}${lastSegment}&host=${base}`;
-
+  async connectToWargame(wargameUrl) {
     try {
-      const result = await this.apiHandler.get(connectURL);
-      const requestData = {
-        host: base,
-        wargame: wargameParam,
-      };
+      const result = await this.apiHandler.sendRequestToServer(wargameUrl, this.connectEndpoint);
+      const { data } = result
+        if (data) {
+          const requestData = {
+            host: data.host,
+            wargame: data.wargame,
+          };
 
-      window.history.pushState({}, '', `${lastSegment}&host=${base}`);
-      this.connectButton.disabled = false;
-      this.wargameUrl.disabled = false;
+          await this.startMessagePolling(requestData, this.latestLogsEndpoint, 10000);
+          this.para.innerText = `Connected user: ${data.name}`;
+          this.connectedUser.appendChild(this.para);
+          this.wargameUrl.disabled = true;
+          this.wargameUrl.style.background = 'white';
+  
+          const historyURL = `/?wargame=${data.wargame}&access=${data.roleId}&host=${data.host}`
 
-      if (result) {
-        // await this.getLastLogs(requestData, this.latestLogsEndpoint)
-        await this.startLogPolling(requestData, this.latestLogsEndpoint, 10000);
-        this.para.innerText = `Connected user: ${result.name}`;
-        this.connectedUser.appendChild(this.para);
-        this.wargameUrl.disabled = true;
-        this.wargameUrl.style.background = 'white';
-        this.activeWargameURL = wargameUrl;
-        this.connectButton.style.display = 'none';
-        this.disconnectButton.style.display = 'inline';
-        this.helpers.displayValidationMessage(this.validationResult, 'Connected successfully', 'green');
-      } else {
-        this.helpers.displayValidationMessage(this.validationResult, 'Invalid response from the server', 'red');
-      }
+          window.history.pushState({}, '', historyURL);
+          this.connectButton.disabled = false;
+          this.wargameUrl.disabled = false;
+            
+          this.activeWargameURL = wargameUrl;
+     
+          this.helpers.formatAndSetJSON(this.jsonData, this.schema);
+          this.helpers.displayValidationMessage(this.validationResult, 'Load...', 'green');
+        } else {
+          this.helpers.displayValidationMessage(this.validationResult, 'Invalid response from the server', 'red');
+        }
     } catch (error) {
-      this.connectButton.disabled = false;
-      this.wargameUrl.disabled = false;
-      this.helpers.displayValidationMessage(this.validationResult, 'Failed to connect', 'red');
-      console.error('Error:', error);
-    }
+        this.connectButton.disabled = false;
+        this.wargameUrl.disabled = false;
+        this.helpers.displayValidationMessage(this.validationResult, 'Failed to connect', 'red');
+        console.error('Error:', error);
+      }
+  }
+  
+  LatestLog(log) {
+    const mostRecentActivityType = log.activityType.aType;
+    this.lastLog.innerText = `Recent Log: ${mostRecentActivityType}`;
+    this.recentMessage.appendChild(this.lastLog);
+  }
+
+  LatestMessage(message) {
+    const roleName = message.details.from.roleName;
+    const content = message.message.content;
+    this.lastMessage.innerText =  `Recent message - ${roleName}: ${content} `;
+    this.recentMessage.appendChild(this.lastMessage);
   }
 
   // Handle sending a user message
   async sendMessage(e) {
     e.preventDefault();
-    const displaySentMessage = (messageContent) => {
-      this.sendUserMessage.innerText = `Send Message: ${messageContent}`;
-      this.recentMessage.appendChild(this.sendUserMessage);
-    };
 
     if (!this.activeWargameURL) {
       return this.helpers.displayValidationMessage(this.validationResult, 'Please join the wargame to send a message.', 'red');
-    }
-
-    if (!this.helpers.isValidJSON(this.jsonData.value)) {
-      return this.helpers.displayValidationMessage(this.validationResult,'Please enter text in JSON format.', 'red');
     }
 
     const { base, wargameParam } = this.extractLastSegmentAndBaseURL(this.activeWargameURL);
@@ -330,11 +296,14 @@ class WargameApp {
       this.jsonData.value = '';
 
       if (response.msg) {
-        const messageContent = response.data.message.content;
-        displaySentMessage(messageContent);
+        this.LatestMessage(response.data)
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      if(error.message === "Invalid JSON format") {
+        this.helpers.displayValidationMessage(this.validationResult, error.message, 'red') 
+      } else {
+        console.error('Error sending message:', error);
+      }
     }
   }
 
@@ -348,29 +317,36 @@ class WargameApp {
   }
 
   // Update the latest log message
-  updateLatestLog(requestData, latestLogsEndpoint) {
+  updateLatestMessage(requestData, latestLogsEndpoint) {
     this.apiHandler.sendRequestToServer(requestData, latestLogsEndpoint).then((res) => {
-      const mostRecentActivityType = res.activityType.aType;
-      this.lastMessage.innerText = `Recent Message: ${mostRecentActivityType}`;
-      this.recentMessage.appendChild(this.lastMessage);
+      document.getElementsByClassName("container")[0].style.display = 'block'
+      this.connectButton.style.display = 'none';
+      this.disconnectButton.style.display = 'inline';
+      
+      const latestLog = res[0];
+      const latestMessage = res[1]
+      this.LatestLog(latestLog)
+      this.LatestMessage(latestMessage)
+
+      this.helpers.displayValidationMessage(this.validationResult, 'Connected successfully', 'green');
     });
   }
 
   // Start polling for log updates
-  startLogPolling(requestData, latestLogsEndpoint, intervalTime) {
+  startMessagePolling(requestData, latestLogsEndpoint, intervalTime) {
     if (this.intervalId) {
       clearInterval(this.intervalId);
     }
 
-    this.updateLatestLog(requestData, latestLogsEndpoint);
+    this.updateLatestMessage(requestData, latestLogsEndpoint);
 
     this.intervalId = setInterval(() => {
-      this.updateLatestLog(requestData, latestLogsEndpoint);
+      this.updateLatestMessage(requestData, latestLogsEndpoint);
     }, intervalTime);
   }
 
   // Stop polling for log updates
-  stopLogPolling() {
+  stopMessagePolling() {
     clearInterval(this.intervalId);
     this.intervalId = null;
   }
