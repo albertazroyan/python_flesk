@@ -31,36 +31,43 @@ def extract_last_segment_and_base_url(url, query_parameters):
 def connect_wargame():
     data = request.get_json()
     params = extract_last_segment_and_base_url(data, query_parameters)
-    wargame = params['wargame']
-    access = params['access']
-    host = params['host']
+    wargame = params.get('wargame')
+    access = params.get('access')
+    host = params.get('host')
 
-    if not wargame or not access or not host:
-        return jsonify({"msg": 'oks', "data": []})
-    
+    if not (wargame and access and host):
+        return jsonify({"msg": 'ok', "data": []})
+
     try:
         response = requests.get(f"{host}/{wargame}/last")
         response.raise_for_status()
-        data = response.json()
-        allForces = data['data'][0]['data']['forces']['forces']
+        response_data = response.json()
+
+        allForces = response_data.get('data', [])[0].get('data', {}).get('forces', {}).get('forces', [])
         role = None
+        force = None
+
         for force in allForces:
-            role = next((roleItem for roleItem in force['roles'] if roleItem['roleId'] == access), None)
-            if role is not None:
+            role = next((roleItem for roleItem in force.get('roles', []) if roleItem.get('roleId') == access), None)
+            if role:
                 break
-        
-        if role:
-          role['wargame'] = wargame
-          role['host'] = host
- 
+
+        if not role or not force:
+            return jsonify({"error": "There is no player matching the provided criteria"}), 400
+
+        force['wargame'] = wargame
+        force['host'] = host
+        force['roles'] = role
+
         response_data = {
             "msg": 'ok',
-            "data": role
+            "data": force
         }
-        
+
         return jsonify(response_data)
+
     except requests.exceptions.RequestException as e:
-        # error_message = str(e)
-        return jsonify(None)
+        return jsonify({"error": "Failed to fetch data"}), 400
 
     return jsonify([])
+
