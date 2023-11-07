@@ -75,7 +75,7 @@
 }
 
 .submit-message-section {
-  background-color: #234868;
+  background-color:#00274b;
   padding: 20px;
   border: 1px solid #ccc;
   border-radius: 5px;
@@ -83,10 +83,9 @@
 
 #json_data {
   width: 100%;
-  padding: 10px;
+  padding: 4px;
   border: 1px solid #ccc;
   border-radius: 5px;
-  min-height: 300px;
 }
 
 .submit-message-section button[type="submit"] {

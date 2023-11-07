@@ -1,6 +1,7 @@
 # routes/connect.py
 from flask import Blueprint, request, jsonify
 import requests
+from datetime import datetime
 
 bp = Blueprint('connect', __name__)
 from urllib.parse import urlparse, parse_qs
@@ -25,6 +26,37 @@ def extract_last_segment_and_base_url(url, query_parameters):
         "access": last_segment,
         "wargame": wargame_param
     }
+
+def create_custom_message(force, role):
+    details = {
+      'channel': 'chat',
+      'from': {
+        'force': force['name'],
+          'forceColor': force['color'],
+          'roleId': role['roleId'],
+          'roleName': role['name'],
+          'iconURL': force.get('iconURL', '')
+        },
+      'messageType': 'Chat',
+      'timestamp': datetime.utcnow().isoformat(),
+      'turnNumber': 0
+    }
+
+    message = {
+      'content': ''
+    }
+
+    custom_message = {
+      '_id': datetime.utcnow().isoformat(),
+      'messageType': 'CustomMessage',
+      'details': details,
+      'message': message,
+      'isOpen': False,
+      'hasBeenRead': False,
+      '_rev': None
+    }
+
+    return custom_message
 
 # Pass the json data as a function argument
 @bp.route("/connect/", methods=["POST"])
@@ -55,13 +87,15 @@ def connect_wargame():
         if not role or not force:
             return jsonify({"error": "There is no player matching the provided criteria"}), 400
 
-        force['wargame'] = wargame
-        force['host'] = host
-        force['roles'] = role
-
+        role['wargame'] = wargame
+        role['host'] = host
+        role['access'] = access
+        
+        custom_message = create_custom_message(force, role)
         response_data = {
             "msg": 'ok',
-            "data": force
+            "data": role,
+            'custom_message': custom_message
         }
 
         return jsonify(response_data)

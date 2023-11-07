@@ -88,6 +88,7 @@ class WargameApp {
     this.wargameUrl = document.getElementById('wargame_url');
     this.recentMessage = document.getElementById('recent_message');
     this.lastLog = document.createElement('span');
+    this.customMessage = []
     this.lastMessage = document.createElement('span');
     this.sendUserMessage = document.createElement('span');
     this.connectedUser = document.getElementById('connected_user');
@@ -97,6 +98,7 @@ class WargameApp {
     this.validationResult = document.getElementById('validationResult');
     this.para = document.createElement('h2');
     this.messageButton = document.getElementById('sendMessage');
+    this.clearMessageButton = document.getElementById('clearMessage');
     this.intervalId = null;
     
     // API endpoints
@@ -120,6 +122,7 @@ class WargameApp {
     this.disconnectButton.addEventListener('click', this.disconnectWargame.bind(this));
     this.connectButton.addEventListener('click', this.connectWargame.bind(this));
     this.messageButton.addEventListener('click', this.sendMessage.bind(this));
+    this.clearMessageButton.addEventListener('click', () => this.jsonData.value = '')
   }
 
   // Handle disconnecting from the wargame
@@ -173,9 +176,8 @@ class WargameApp {
     this.helpers.displayValidationMessage(this.validationResult, 'Load...', 'green');
     try {
       const result = await this.apiHandler.sendRequestToServer(wargameUrl, this.connectEndpoint);
-      const { data, msg } = result
-      const role = data.roles
-  
+      const { data, custom_message, msg } = result
+
       if (data === null) return  this.helpers.displayValidationMessage(this.validationResult, 'enter right ', 'red')
         if (msg && data.length !== 0 && data !== null) {
           const requestData = {
@@ -183,13 +185,15 @@ class WargameApp {
             wargame: data.wargame,
           };
 
-          await this.startMessagePolling(requestData, this.latestLogsEndpoint, 10000);
-          this.para.innerText = `Connected user: ${role.name}`;
+          await this.startMessagePolling(requestData, this.latestLogsEndpoint, 10000)
+          this.customMessage = custom_message
+          this.jsonData.placeholder = 'type the text';
+
+          this.para.innerText = `Connected user: ${data.name}`;
           this.connectedUser.appendChild(this.para);
           this.wargameUrl.style.background = 'white';
   
-          const historyURL = `/?wargame=${data.wargame}&access=${role.roleId}&host=${data.host}`
-
+          const historyURL = `/?wargame=${data.wargame}&access=${data.access}&host=${data.host}`
           window.history.pushState({}, '', historyURL);
           this.connectButton.disabled = false;
           this.wargameUrl.disabled = false;
@@ -224,31 +228,40 @@ class WargameApp {
   // Handle sending a user message
   async sendMessage(e) {
     e.preventDefault();
-
+  
     if (!this.activeWargameURL) {
-      return this.helpers.displayValidationMessage(this.validationResult, 'Please join the wargame to send a message.', 'red');
+      this.helpers.displayValidationMessage(this.validationResult, 'Please join the wargame to send a message.', 'red');
+      return;
     }
-
-    const parsedUrl = new URL(this.activeWargameURL);
-    const wargameParam = parsedUrl.searchParams.get(this.helpers.queryParameters.wargame);
-    const base = `${parsedUrl.protocol}//${parsedUrl.host}`;
-    
-    const messageData = {
-      data: this.jsonData.value,
-      wargame: wargameParam,
-      host: base,
-    };
-
+  
     try {
+      const details = { ...this.customMessage.details, timestamp: new Date().toISOString() };
+      const customMessage = {
+        ...this.customMessage,
+        _id: new Date().toISOString(),
+        message: { content: this.jsonData.value },
+        details: details
+      };
+  
+      const parsedUrl = new URL(this.activeWargameURL);
+      const wargameParam = parsedUrl.searchParams.get(this.helpers.queryParameters.wargame);
+      const base = `${parsedUrl.protocol}//${parsedUrl.host}`;
+  
+      const messageData = {
+        data: JSON.stringify(customMessage),
+        wargame: wargameParam,
+        host: base,
+      };
+  
       const response = await this.apiHandler.sendRequestToServer(messageData, this.submitMessageEndpoint);
-      this.jsonData.value = '';
-
+  
       if (response.msg) {
-        this.LatestMessage(response.data)
+        this.LatestMessage(response.data);
+        this.jsonData.value = ''
       }
     } catch (error) {
-      if(error.message === "Invalid JSON format") {
-        this.helpers.displayValidationMessage(this.validationResult, error.message, 'red') 
+      if (error.message === "Invalid JSON format") {
+        this.helpers.displayValidationMessage(this.validationResult, error.message, 'red');
       } else {
         console.error('Error sending message:', error);
       }
@@ -263,7 +276,6 @@ class WargameApp {
       this.disconnectButton.style.display = 'inline';
 
       const {latestLog, latestMessage} = res
-      this.jsonData.placeholder = this.jsonData.value = JSON.stringify(latestMessage, null, 4);
       
       this.LatestLog(latestLog)
       this.LatestMessage(latestMessage)
