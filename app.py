@@ -1,11 +1,19 @@
 from flask import Flask, render_template, request, jsonify
-from routes import home, connect, logs, messages
+from routes import home, connect, messages
+from flask_socketio import SocketIO
+
 app = Flask(__name__)
 app.config.from_object('config')
+socketio = SocketIO(app, manage_session=False)
 
-blueprints = [home.bp, connect.bp, logs.bp, messages.bp]
+@socketio.on('message')
+def handle_message(data):
+    print('received message: ' + data)
+    
+blueprints = [home.bp, connect.bp, messages.bp]
 for blueprint in blueprints:
     app.register_blueprint(blueprint)
 
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app, debug=True) 

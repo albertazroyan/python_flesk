@@ -3,19 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel='shortcut icon' href="{{ url_for('static', filename='img/favicon.ico') }}" />
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    
     <title>Serge Wargame Demonstrator</title>
 </head>
 <body>
+  <div class="loading" style="display: none">
+    <div class="loader"></div>
+  </div>
   <div id="flex-content-wrapper">
     <header>
+      <img src="{{ url_for('static', filename='img/sergeDefault.ico') }}" alt="Serge Logo">
       <h1>Serge Wargame Connector</h1>
     </header>
     <main>
       <form class="connection-form">
-        <input type="text" id="wargame_url" name="wargame_url" placeholder="Enter the Wargame URL" required>
-        <p>Note: please enter a full connection string including role and access id, such as <em>http://localhost:8080/?wargame=wargame-l6nngxlk&access=blue-mtg-1</em></p>
+        <input type="text" id="wargame_url" name="wargame_url" value="{{wargame_url}}" placeholder="Enter the Wargame URL" required>
+        <p id="note" style="display: none;">Note: please enter a full connection string including role and access id, such as - <em>http://localhost:8080/?wargame=wargame-l6nngxlk&access=blue-mtg-1</em></p>
         <div class="connection-buttons">
           <button type="submit">Connect</button>
           <button type="submit" id="disconnectButton" style="display: none">Disconnect</button>
@@ -28,15 +33,18 @@
         <section class="submit-message-section">
           <h2>Submit New Message:</h2>
           <form>
-            <label for="json_data">Message:</label>
             <textarea id="json_data" name="json_data" placeholder="Submit New Message" rows="5" cols="50" required></textarea>
             <button id="sendMessage" type="submit">Send</button>
-            <button id="clearMessage" style="background: red" type="submit">Clear</button>
+            <button id="clearMessage" style="background: red" type="reset">Clear</button>
           </form>
         </section>
       </div>
     </main>
   </div>
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+  <script type="text/javascript" charset="utf-8">
+    // const socket = io.connect('http://' + document.domain + ':' + location.port + '/chat');
+</script> -->
   <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
